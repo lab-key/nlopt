@@ -182,14 +182,15 @@ nlopt_result praxis_(double t0, double machep, double h0,
     prev_fbest = q_1.fbest = global_1.fx = f(n, &x[1], f_data);
     memcpy(q_1.xbest, &x[1], n*sizeof(double));
     memcpy(prev_xbest, &x[1], n*sizeof(double));
-    stop->nevals++;
+    ++ *(stop->nevals_p);
     q_1.stop = stop;
     q_1.qf1 = global_1.fx;
     if (t0 > 0)
 	 t_old = small + t0;
     else {
 	 t_old = 0;
-	 for (i__ = 0; i__ < n; ++i__)
+	 if (stop->xtol_abs)
+	  for (i__ = 0; i__ < n; ++i__)
 	      if (stop->xtol_abs[i__] > t_old)
 		   t_old = stop->xtol_abs[i__];
 	 t_old += small;
@@ -622,7 +623,7 @@ static void minfit_(int m, int n, double machep,
 
     /* Local variables */
     double *e; /* size n */
-    double c__, f, g, h__;
+    double c__, f = 0.0, g, h__;
     int i__, j, k, l;
     double s, x, y, z__;
     int l2, ii, kk, kt, ll2, lp1;
@@ -1236,7 +1237,7 @@ L2:
 L4:
     ++(*nf);
     ret_val = f(n, t, f_data);
-    stop->nevals++;
+    ++ *(stop->nevals_p);
     if (ret_val < q_1->fbest) {
 	 q_1->fbest = ret_val;
 	 memcpy(q_1->xbest, t, n * sizeof(double));

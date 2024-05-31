@@ -24,7 +24,7 @@ static void update_(int *n, int *npt, double *bmat,
     double d__1, d__2, d__3;
 
     /* Local variables */
-    int i__, j, k, jl, jp;
+    int i__, j, k, jp;
     double one, tau, temp;
     int nptm;
     double zero, alpha, tempa, tempb, ztest;
@@ -70,7 +70,6 @@ static void update_(int *n, int *npt, double *bmat,
 
 /*     Apply the rotations that put zeros in the KNEW-th row of ZMAT. */
 
-    jl = 1;
     i__2 = nptm;
     for (j = 2; j <= i__2; ++j) {
 	if ((d__1 = zmat[*knew + j * zmat_dim1], fabs(d__1)) > ztest) {
@@ -158,8 +157,8 @@ static nlopt_result rescue_(int *n, int *npt, const double *xl, const double *xu
     /* Local variables */
     double f;
     int i__, j, k, ih, jp, ip, iq, np, iw;
-    double xp, xq, den;
-    int ihp;
+    double xp = 0.0, xq = 0.0, den;
+    int ihp = 0;
     double one;
     int ihq, jpn, kpt;
     double sum, diff, half, beta;
@@ -675,7 +674,7 @@ L260:
 /* L290: */
 	}
 
-	stop->nevals++;
+	++ *(stop->nevals_p);
 	f = calfun(*n, &w[1], calfun_data);
 	fval[kpt] = f;
 	if (f < fval[*kopt]) {
@@ -760,12 +759,12 @@ static void altmov_(int *n, int *npt, double *xpt,
     double slbd;
     int iubd;
     double vlag, subd, temp;
-    int ksav;
-    double step, zero, curv;
+    int ksav = 0;
+    double step = 0.0, zero, curv;
     int iflag;
-    double scale, csave, tempa, tempb, tempd, const__, sumin, ggfree;
-    int ibdsav;
-    double dderiv, bigstp, predsq, presav, distsq, stpsav, wfixsq, wsqsav;
+    double scale, csave = 0.0, tempa, tempb, tempd, const__, sumin, ggfree;
+    int ibdsav = 0;
+    double dderiv, bigstp, predsq, presav, distsq, stpsav = 0.0, wfixsq, wsqsav;
 
 
 /*     The arguments N, NPT, XPT, XOPT, BMAT, ZMAT, NDIM, SL and SU all have */
@@ -1174,16 +1173,16 @@ static void trsbox_(int *n, int *npt, double *xpt,
     double ds;
     int iu;
     double dhd, dhs, cth, one, shs, sth, ssq, half, beta, sdec, blen;
-    int iact, nact;
+    int iact = 0, nact;
     double angt, qred;
     int isav;
-    double temp, zero, xsav, xsum, angbd, dredg, sredg;
+    double temp, zero, xsav = 0.0, xsum, angbd = 0.0, dredg = 0.0, sredg = 0.0;
     int iterc;
-    double resid, delsq, ggsav, tempa, tempb, ratio, sqstp, redmax, 
-	    dredsq, redsav, onemin, gredsq, rednew;
-    int itcsav;
-    double rdprev, rdnext, stplen, stepsq;
-    int itermax;
+    double resid, delsq, ggsav = 0.0, tempa, tempb, redmax,
+	    dredsq = 0.0, redsav, onemin, gredsq = 0.0, rednew;
+    int itcsav = 0;
+    double rdprev, rdnext = 0.0, stplen, stepsq;
+    int itermax = 0;
 
 
 /*     The arguments N, NPT, XPT, XOPT, GOPT, HQ, PQ, SL and SU have the same */
@@ -1259,7 +1258,6 @@ static void trsbox_(int *n, int *npt, double *xpt,
 
     iterc = 0;
     nact = 0;
-    sqstp = zero;
     i__1 = *n;
     for (i__ = 1; i__ <= i__1; ++i__) {
 	xbdi[i__] = zero;
@@ -1512,7 +1510,6 @@ L120:
 		xbdi[i__] = one;
 		goto L100;
 	    }
-	    ratio = one;
 /* Computing 2nd power */
 	    d__1 = d__[i__];
 /* Computing 2nd power */
@@ -1728,8 +1725,9 @@ static nlopt_result prelim_(int *n, int *npt, double *x,
     double f;
     int i__, j, k, ih, np, nfm;
     double one;
-    int nfx, ipt, jpt;
-    double two, fbeg, diff, half, temp, zero, recip, stepa, stepb;
+    int nfx, ipt = 0, jpt = 0;
+    /* fbeg will be initialized below, init here to avoid maybe-uninitialized warning */
+    double two, fbeg = 0.0, diff, half, temp, zero, recip, stepa = 0.0, stepb = 0.0;
     int itemp;
     double rhosq;
 
@@ -1877,7 +1875,7 @@ L50:
 	}
 /* L60: */
     }
-    stop->nevals++;
+    ++ *(stop->nevals_p);
     f = calfun(*n, &x[1], calfun_data);
     fval[nf] = f;
     if (nf == 1) {
@@ -1979,7 +1977,7 @@ static nlopt_result bobyqb_(int *n, int *npt, double *x,
     int kopt, nptm;
     double zero, curv;
     int ksav;
-    double gqsq, dist, sumw, sumz, diffa, diffb, diffc, hdiag;
+    double gqsq, dist, sumw, sumz, diffa, diffb, diffc = 0.0, hdiag;
     int kbase;
     double alpha, delta, adelt, denom, fsave, bdtol, delsq;
     int nresc, nfsav;
@@ -2098,12 +2096,12 @@ static nlopt_result bobyqb_(int *n, int *npt, double *x,
 
     rho = *rhobeg;
     delta = rho;
-    nresc = stop->nevals;
+    nresc = *(stop->nevals_p);
     ntrits = 0;
     diffa = zero;
     diffb = zero;
     itest = 0;
-    nfsav = stop->nevals;
+    nfsav = *(stop->nevals_p);
 
 /*     Update GOPT if necessary before the first iteration and after each */
 /*     call of RESCUE that makes a call of CALFUN. */
@@ -2123,7 +2121,7 @@ L20:
 		gopt[i__] += hq[ih] * xopt[j];
 	    }
 	}
-	if (stop->nevals > *npt) {
+	if (*(stop->nevals_p) > *npt) {
 	    i__2 = *npt;
 	    for (k = 1; k <= i__2; ++k) {
 		temp = zero;
@@ -2161,7 +2159,7 @@ L60:
 /* Computing 2nd power */
 	d__1 = ten * rho;
 	distsq = d__1 * d__1;
-	if (stop->nevals <= nfsav + 2) {
+	if (*(stop->nevals_p) <= nfsav + 2) {
 	    goto L650;
 	}
 
@@ -2331,7 +2329,7 @@ L90:
 /*     useful safeguard, but is not invoked in most applications of BOBYQA. */
 
 L190:
-    nfsav = stop->nevals;
+    nfsav = *(stop->nevals_p);
     kbase = kopt;
     rc2 = rescue_(n, npt, &xl[1], &xu[1], 
 		  stop, calfun, calfun_data,
@@ -2359,9 +2357,9 @@ L190:
       rc = rc2;
       goto L720; 
     }
-    nresc = stop->nevals;
-    if (nfsav < stop->nevals) {
-	nfsav = stop->nevals;
+    nresc = *(stop->nevals_p);
+    if (nfsav < *(stop->nevals_p)) {
+	nfsav = *(stop->nevals_p);
 	goto L20;
     }
     if (ntrits > 0) {
@@ -2477,7 +2475,7 @@ L230:
 /* Computing 2nd power */
 	d__1 = vlag[knew];
 	if (denom <= half * (d__1 * d__1)) {
-	    if (stop->nevals > nresc) {
+	    if (*(stop->nevals_p) > nresc) {
 		goto L190;
 	    }
 	    /* Return from BOBYQA because of much cancellation in a
@@ -2540,7 +2538,7 @@ L350:
 	    ;
 	}
 	if (scaden <= half * biglsq) {
-	    if (stop->nevals > nresc) {
+	    if (*(stop->nevals_p) > nresc) {
 		goto L190;
 	    }
 	    /* Return from BOBYQA because of much cancellation in a
@@ -2579,7 +2577,7 @@ L360:
     else if (nlopt_stop_time(stop)) rc = NLOPT_MAXTIME_REACHED;
     if (rc != NLOPT_SUCCESS) goto L720;
 
-    stop->nevals++;
+    ++ *(stop->nevals_p);
     f = calfun(*n, &x[1], calfun_data);
     if (ntrits == -1) {
 	fsave = f;
@@ -2625,7 +2623,7 @@ L360:
     diffb = diffa;
     diffa = fabs(diff);
     if (dnorm > rho) {
-	nfsav = stop->nevals;
+	nfsav = *(stop->nevals_p);
     }
 
 /*     Pick the next value of DELTA after a trust region step. */
@@ -3005,7 +3003,6 @@ L650:
 L680:
     if (rho > *rhoend) {
 	delta = half * rho;
-    if( *rhoend != 0.0 ) {
 	ratio = rho / *rhoend;
 	if (ratio <= 16.) {
 	    rho = *rhoend;
@@ -3014,12 +3011,9 @@ L680:
 	} else {
 	    rho = tenth * rho;
 	}
-    } else {
-        rho = tenth * rho;
-    }
 	delta = MAX2(delta,rho);
 	ntrits = 0;
-	nfsav = stop->nevals;
+	nfsav = *(stop->nevals_p);
 	goto L60;
     }
 
@@ -3100,11 +3094,17 @@ nlopt_result bobyqa(int n, int npt, double *x,
                  equal in all directions */
     s = nlopt_compute_rescaling(U(n), dx);
     if (!s) return NLOPT_OUT_OF_MEMORY;
+    for (j = 0; j < n; ++j)
+        if (s[j] == 0 || !nlopt_isfinite(s[j])) {
+            nlopt_stop_msg(stop, "invalid scaling %g of dimension %d: possible over/underflow?", s[j], j);
+            ret = NLOPT_INVALID_ARGS; goto done;
+        }
 
     /* this statement must go before goto done, so that --x occurs */
     nlopt_rescale(U(n), s, x, x); --x;
 
     xs = (double *) malloc(sizeof(double) * (U(n)));
+    if (!xs) { ret = NLOPT_OUT_OF_MEMORY; goto done; }
 
     sxl = nlopt_new_rescaled(U(n), s, xl);
     if (!sxl) { ret = NLOPT_OUT_OF_MEMORY; goto done; }
@@ -3123,9 +3123,11 @@ nlopt_result bobyqa(int n, int npt, double *x,
 
     /* SGJ, 2009: compute rhoend from NLopt stop info */
     rhoend = stop->xtol_rel * (rhobeg);
-    for (j = 0; j < n; ++j)
-	 if (rhoend < stop->xtol_abs[j] / fabs(s[j]))
-	      rhoend = stop->xtol_abs[j] / fabs(s[j]);
+    if (stop->xtol_abs) {
+        for (j = 0; j < n; ++j)
+         if (rhoend < stop->xtol_abs[j] / fabs(s[j]))
+              rhoend = stop->xtol_abs[j] / fabs(s[j]);
+    }
 
 
 /*     This subroutine seeks the least value of a function of many variables, */
@@ -3174,6 +3176,7 @@ nlopt_result bobyqa(int n, int npt, double *x,
     if (npt < n + 2 || npt > (n + 2) * np / 2) {
       /* Return from BOBYQA because NPT is not in the required interval */
       ret = NLOPT_INVALID_ARGS;
+      nlopt_stop_msg(stop, "invalid number of sampling points");
       goto done;
     }
 
@@ -3219,6 +3222,8 @@ nlopt_result bobyqa(int n, int npt, double *x,
 	  /* Return from BOBYQA because one of the differences
 	     XU(I)-XL(I)s is less than 2*RHOBEG. */
 	     ret = NLOPT_INVALID_ARGS;
+             nlopt_stop_msg(stop, "insufficient space between the bounds: %g - %g < %g",
+                            xu[j], xl[j], rhobeg+rhobeg);
 	     goto done;
 	}
 	jsl = isl + j - 1;

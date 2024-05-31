@@ -7,7 +7,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
 PROJECT(NLOPT)
 
 # define project name ----------------------------------------------------------
-SET(NLOPT_VERSION 2.4.2)
+SET(NLOPT_VERSION 2.7.1)
 
 # what languages we use --------------------------------------------------------
 ENABLE_LANGUAGE(C)
@@ -42,4 +42,5 @@ ENDIF(NOT DEFINED COMPOSITE_PROJECT)
 # project subdirectories  ------------------------------------------------------
 # ==============================================================================
 
+INCLUDE_DIRECTORIES(include SYSTEM)
 ADD_SUBDIRECTORY(src)

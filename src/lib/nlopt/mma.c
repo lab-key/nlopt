@@ -7,17 +7,17 @@
  * distribute, sublicense, and/or sell copies of the Software, and to
  * permit persons to whom the Software is furnished to do so, subject to
  * the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be
  * included in all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
  * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
  * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. 
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #include <stdlib.h>
@@ -32,11 +32,6 @@ unsigned mma_verbose = 0; /* > 0 for verbose output */
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
-
-#ifndef HAVE_ISNAN
-static int my_isnan(double x) { return x != x; }
-#  define isnan my_isnan
-#endif
 
 /* magic minimum value for rho in MMA ... the 2002 paper says it should
    be a "fixed, strictly positive `small' number, e.g. 1e-5"
@@ -65,7 +60,7 @@ static double dual_func(unsigned m, const double *y, double *grad, void *d_)
 {
      dual_data *d = (dual_data *) d_;
      unsigned n = d->n;
-     const double *x = d->x, *lb = d->lb, *ub = d->ub, *sigma = d->sigma, 
+     const double *x = d->x, *lb = d->lb, *ub = d->ub, *sigma = d->sigma,
 	  *dfdx = d->dfdx;
      const double *dfcdx = d->dfcdx;
      double rho = d->rho, fval = d->fval;
@@ -79,8 +74,8 @@ static double dual_func(unsigned m, const double *y, double *grad, void *d_)
 
      val = d->gval = fval;
      d->wval = 0;
-     for (i = 0; i < m; ++i) 
-	  val += y[i] * (gcval[i] = isnan(fcval[i]) ? 0 : fcval[i]);
+     for (i = 0; i < m; ++i)
+	  val += y[i] * (gcval[i] = nlopt_isnan(fcval[i]) ? 0 : fcval[i]);
 
      for (j = 0; j < n; ++j) {
 	  double u, v, dx, denominv, c, sigma2, dx2;
@@ -105,7 +100,7 @@ static double dual_func(unsigned m, const double *y, double *grad, void *d_)
 
 	  u = dfdx[j];
 	  v = fabs(dfdx[j]) * sigma[j] + 0.5 * rho;
-	  for (i = 0; i < m; ++i) if (!isnan(fcval[i])) {
+	  for (i = 0; i < m; ++i) if (!nlopt_isnan(fcval[i])) {
 	       u += dfcdx[i*n + j] * y[i];
 	       v += (fabs(dfcdx[i*n + j]) * sigma[j] + 0.5 * rhoc[i]) * y[i];
 	  }
@@ -117,7 +112,7 @@ static double dual_func(unsigned m, const double *y, double *grad, void *d_)
 	  if (xcur[j] > x[j]+0.9*sigma[j]) xcur[j] = x[j]+0.9*sigma[j];
 	  else if (xcur[j] < x[j]-0.9*sigma[j]) xcur[j] = x[j]-0.9*sigma[j];
 	  dx = xcur[j] - x[j];
-	  
+
 	  /* function value: */
 	  dx2 = dx * dx;
 	  denominv = 1.0 / (sigma2 - dx2);
@@ -128,8 +123,8 @@ static double dual_func(unsigned m, const double *y, double *grad, void *d_)
 	  d->gval += (dfdx[j] * c + (fabs(dfdx[j])*sigma[j] + 0.5*rho) * dx2)
 	       * denominv;
 	  d->wval += 0.5 * dx2 * denominv;
-	  for (i = 0; i < m; ++i) if (!isnan(fcval[i]))
-	       gcval[i] += (dfcdx[i*n+j] * c + (fabs(dfcdx[i*n+j])*sigma[j] 
+	  for (i = 0; i < m; ++i) if (!nlopt_isnan(fcval[i]))
+	       gcval[i] += (dfcdx[i*n+j] * c + (fabs(dfcdx[i*n+j])*sigma[j]
 						+ 0.5*rhoc[i]) * dx2)
 		    * denominv;
      }
@@ -153,7 +148,7 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 			  double *x, /* in: initial guess, out: minimizer */
 			  double *minf,
 			  nlopt_stopping *stop,
-			  nlopt_opt dual_opt)
+			  nlopt_opt dual_opt, int inner_maxeval, unsigned verbose)
 {
      nlopt_result ret = NLOPT_SUCCESS;
      double *xcur, rho, *sigma, *dfdx, *dfdx_cur, *xprev, *xprevprev, fcur;
@@ -165,8 +160,14 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
      double infeasibility;
      unsigned mfc;
 
+	 verbose = MAX(mma_verbose, verbose);
+
      m = nlopt_count_constraints(mfc = m, fc);
-     if (nlopt_get_dimension(dual_opt) != m) return NLOPT_INVALID_ARGS;
+     if (nlopt_get_dimension(dual_opt) != m) {
+         nlopt_stop_msg(stop, "dual optimizer has wrong dimension %d != %d",
+                        nlopt_get_dimension(dual_opt), m);
+         return NLOPT_INVALID_ARGS;
+     }
      sigma = (double *) malloc(sizeof(double) * (6*n + 2*m*n + m*7));
      if (!sigma) return NLOPT_OUT_OF_MEMORY;
      dfdx = sigma + n;
@@ -210,7 +211,7 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
      }
 
      dd.fval = fcur = *minf = f(n, x, dfdx, f_data);
-     stop->nevals++;
+     ++ *(stop->nevals_p);
      memcpy(xcur, x, sizeof(double) * n);
      if (nlopt_stop_forced(stop)) { ret = NLOPT_FORCED_STOP; goto done; }
 
@@ -222,7 +223,7 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 	  if (nlopt_stop_forced(stop)) { ret = NLOPT_FORCED_STOP; goto done; }
      }
      for (i = 0; i < m; ++i) {
-	  feasible = feasible && (fcval[i] <= 0 || isnan(fcval[i]));
+	  feasible = feasible && (fcval[i] <= 0 || nlopt_isnan(fcval[i]));
 	  if (fcval[i] > infeasibility) infeasibility = fcval[i];
      }
      /* For non-feasible initial points, set a finite (large)
@@ -232,7 +233,7 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 	constraint weighted by 1e40 -- basically, minimizing the
 	unfeasible constraint until it becomes feasible or until we at
 	least obtain a step towards a feasible point.
-	
+
 	Svanberg suggested a different approach in his 1987 paper, basically
 	introducing additional penalty variables for unfeasible constraints,
 	but this is easier to implement and at least as efficient. */
@@ -247,11 +248,12 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
      nlopt_remove_equality_constraints(dual_opt);
 
      while (1) { /* outer iterations */
+	  int inner_nevals = 0;
 	  double fprev = fcur;
 	  if (nlopt_stop_forced(stop)) ret = NLOPT_FORCED_STOP;
 	  else if (nlopt_stop_evals(stop)) ret = NLOPT_MAXEVAL_REACHED;
 	  else if (nlopt_stop_time(stop)) ret = NLOPT_MAXTIME_REACHED;
-	  else if (feasible && *minf < stop->minf_max) 
+	  else if (feasible && *minf < stop->minf_max)
 	       ret = NLOPT_MINF_MAX_REACHED;
 	  if (ret != NLOPT_SUCCESS) goto done;
 	  if (++k > 1) memcpy(xprevprev, xprev, sizeof(double) * n);
@@ -270,7 +272,7 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 	       mma_verbose = 0; /* no recursive verbosity */
 	       reti = nlopt_optimize_limited(dual_opt, y, &min_dual,
 					     0,
-					     stop->maxtime - (nlopt_seconds() 
+					     stop->maxtime - (nlopt_seconds()
 							      - stop->start));
 	       mma_verbose = save_verbose;
 	       if (reti < 0 || reti == NLOPT_MAXTIME_REACHED) {
@@ -279,17 +281,18 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 	       }
 
 	       dual_func(m, y, NULL, &dd); /* evaluate final xcur etc. */
-	       if (mma_verbose) {
+	       if (verbose) {
 		    printf("MMA dual converged in %d iterations to g=%g:\n",
 			   dd.count, dd.gval);
-		    for (i = 0; i < MIN(mma_verbose, m); ++i)
-			 printf("    MMA y[%d]=%g, gc[%d]=%g\n",
+		    for (i = 0; i < MIN(verbose, m); ++i)
+			 printf("    MMA y[%u]=%g, gc[%u]=%g\n",
 				i, y[i], i, dd.gcval[i]);
 	       }
 
 	       fcur = f(n, xcur, dfdx_cur, f_data);
-	       stop->nevals++;
-	       if (nlopt_stop_forced(stop)) { 
+	       ++ *(stop->nevals_p);
+		   ++inner_nevals;
+	       if (nlopt_stop_forced(stop)) {
 		    ret = NLOPT_FORCED_STOP; goto done; }
 	       feasible_cur = 1; infeasibility_cur = 0;
 	       new_infeasible_constraint = 0;
@@ -298,17 +301,17 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 		    nlopt_eval_constraint(fcval_cur + i, dfcdx_cur + i*n,
 					  fc + ifc, n, xcur);
 		    i += fc[ifc].m;
-		    if (nlopt_stop_forced(stop)) { 
+		    if (nlopt_stop_forced(stop)) {
 			 ret = NLOPT_FORCED_STOP; goto done; }
 	       }
 	       for (i = ifc = 0; ifc < mfc; ++ifc) {
 		    unsigned i0 = i, inext = i + fc[ifc].m;
 		    for (; i < inext; ++i)
-			 if (!isnan(fcval_cur[i])) {
-			      feasible_cur = feasible_cur 
+			 if (!nlopt_isnan(fcval_cur[i])) {
+			      feasible_cur = feasible_cur
 				   && (fcval_cur[i] <= fc[ifc].tol[i-i0]);
-			      if (!isnan(fcval[i]))
-				   inner_done = inner_done && 
+			      if (!nlopt_isnan(fcval[i]))
+				   inner_done = inner_done &&
 					(dd.gcval[i] >= fcval_cur[i]);
 			      else if (fcval_cur[i] > 0)
 				   new_infeasible_constraint = 1;
@@ -317,9 +320,11 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 			 }
 	       }
 
+		   inner_done = inner_done || (inner_maxeval > 0 && inner_nevals == inner_maxeval);
+
 	       if ((fcur < *minf && (inner_done || feasible_cur || !feasible))
 		    || (!feasible && infeasibility_cur < infeasibility)) {
-		    if (mma_verbose && !feasible_cur)
+		    if (verbose && !feasible_cur)
 			 printf("MMA - using infeasible point?\n");
 		    dd.fval = *minf = fcur;
 		    infeasibility = infeasibility_cur;
@@ -327,7 +332,7 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 		    memcpy(x, xcur, sizeof(double)*n);
 		    memcpy(dfdx, dfdx_cur, sizeof(double)*n);
 		    memcpy(dfcdx, dfcdx_cur, sizeof(double)*n*m);
-		    
+
 		    /* once we have reached a feasible solution, the
 		       algorithm should never make the solution infeasible
 		       again (if inner_done), although the constraints may
@@ -346,7 +351,7 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 	       if (nlopt_stop_forced(stop)) ret = NLOPT_FORCED_STOP;
 	       else if (nlopt_stop_evals(stop)) ret = NLOPT_MAXEVAL_REACHED;
 	       else if (nlopt_stop_time(stop)) ret = NLOPT_MAXTIME_REACHED;
-	       else if (feasible && *minf < stop->minf_max) 
+	       else if (feasible && *minf < stop->minf_max)
 		    ret = NLOPT_MINF_MAX_REACHED;
 	       if (ret != NLOPT_SUCCESS) goto done;
 
@@ -355,16 +360,16 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 	       if (fcur > dd.gval)
 		    rho = MIN(10*rho, 1.1 * (rho + (fcur-dd.gval) / dd.wval));
 	       for (i = 0; i < m; ++i)
-		    if (!isnan(fcval_cur[i]) && fcval_cur[i] > dd.gcval[i])
-			 rhoc[i] = 
-			      MIN(10*rhoc[i], 
-				  1.1 * (rhoc[i] + (fcval_cur[i]-dd.gcval[i]) 
+		    if (!nlopt_isnan(fcval_cur[i]) && fcval_cur[i] > dd.gcval[i])
+			 rhoc[i] =
+			      MIN(10*rhoc[i],
+				  1.1 * (rhoc[i] + (fcval_cur[i]-dd.gcval[i])
 					 / dd.wval));
-	       
-	       if (mma_verbose)
+
+	       if (verbose)
 		    printf("MMA inner iteration: rho -> %g\n", rho);
-	       for (i = 0; i < MIN(mma_verbose, m); ++i)
-		    printf("                 MMA rhoc[%d] -> %g\n", i,rhoc[i]);
+	       for (i = 0; i < MIN(verbose, m); ++i)
+		    printf("                 MMA rhoc[%u] -> %g\n", i,rhoc[i]);
 	  }
 
 	  if (nlopt_stop_ftol(stop, fcur, fprev))
@@ -372,15 +377,15 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 	  if (nlopt_stop_x(stop, xcur, xprev))
 	       ret = NLOPT_XTOL_REACHED;
 	  if (ret != NLOPT_SUCCESS) goto done;
-	       
+
 	  /* update rho and sigma for iteration k+1 */
 	  rho = MAX(0.1 * rho, MMA_RHOMIN);
-	  if (mma_verbose)
+	  if (verbose)
 	       printf("MMA outer iteration: rho -> %g\n", rho);
 	  for (i = 0; i < m; ++i)
 	       rhoc[i] = MAX(0.1 * rhoc[i], MMA_RHOMIN);
-	  for (i = 0; i < MIN(mma_verbose, m); ++i)
-	       printf("                 MMA rhoc[%d] -> %g\n", i, rhoc[i]);
+	  for (i = 0; i < MIN(verbose, m); ++i)
+	       printf("                 MMA rhoc[%u] -> %g\n", i, rhoc[i]);
 	  if (k > 1) {
 	       for (j = 0; j < n; ++j) {
 		    double dx2 = (xcur[j]-xprev[j]) * (xprev[j]-xprevprev[j]);
@@ -391,8 +396,8 @@ nlopt_result mma_minimize(unsigned n, nlopt_func f, void *f_data,
 			 sigma[j] = MAX(sigma[j], 0.01*(ub[j]-lb[j]));
 		    }
 	       }
-	       for (j = 0; j < MIN(mma_verbose, n); ++j)
-		    printf("                 MMA sigma[%d] -> %g\n", 
+	       for (j = 0; j < MIN(verbose, n); ++j)
+		    printf("                 MMA sigma[%u] -> %g\n",
 			   j, sigma[j]);
 	  }
      }

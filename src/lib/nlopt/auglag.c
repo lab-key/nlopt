@@ -34,7 +34,7 @@ static double auglag(unsigned n, const double *x, double *grad, void *data)
      unsigned j, k;
 
      L = d->f(n, x, grad, d->f_data);
-     d->stop->nevals++;
+     ++ *(d->stop->nevals_p);
      if (nlopt_stop_forced(d->stop)) return L;
 
      for (ii = i = 0; i < d->p; ++i) {
@@ -79,7 +79,8 @@ nlopt_result auglag_minimize(int n, nlopt_func f, void *f_data,
      nlopt_result ret = NLOPT_SUCCESS;
      double ICM = HUGE_VAL, minf_penalty = HUGE_VAL, penalty;
      double *xcur = NULL, fcur;
-     int i, ii, k, feasible, minf_feasible = 0;
+     int i, ii, feasible, minf_feasible = 0;
+     unsigned int k;
      int auglag_iters = 0;
      int max_constraint_dim;
 
@@ -142,7 +143,7 @@ nlopt_result auglag_minimize(int n, nlopt_func f, void *f_data,
      /* starting rho suggested by B & M */
      if (d.p > 0 || d.m > 0) {
 	  double con2 = 0;
-	  d.stop->nevals++;
+	  ++ *(d.stop->nevals_p);
 	  fcur = f(n, xcur, NULL, f_data);
 	  if (nlopt_stop_forced(stop)) {
 	       ret = NLOPT_FORCED_STOP; goto done; }
@@ -173,7 +174,7 @@ nlopt_result auglag_minimize(int n, nlopt_func f, void *f_data,
 	  *minf = fcur;
 	  minf_penalty = penalty;
 	  minf_feasible = feasible;
-	  d.rho = MAX(1e-6, MIN(10, 2 * fabs(*minf) / con2));
+	  d.rho = (con2 > 0) ? MAX(1e-6, MIN(10, 2 * fabs(*minf) / con2)) : 10;
      }
      else
 	  d.rho = 1; /* whatever, doesn't matter */
@@ -190,14 +191,14 @@ nlopt_result auglag_minimize(int n, nlopt_func f, void *f_data,
 	  double prev_ICM = ICM;
 	  
 	  ret = nlopt_optimize_limited(sub_opt, xcur, &fcur,
-				       stop->maxeval - stop->nevals,
+				       stop->maxeval - *(stop->nevals_p),
 				       stop->maxtime - (nlopt_seconds() 
 							- stop->start));
 	  if (auglag_verbose)
 	       printf("auglag: subopt return code %d\n", ret);
 	  if (ret < 0) break;
 	  
-	  d.stop->nevals++;
+	  ++ *(d.stop->nevals_p);
 	  fcur = f(n, xcur, NULL, f_data);
 	  if (nlopt_stop_forced(stop)) {
 	       ret = NLOPT_FORCED_STOP; goto done; }
@@ -280,7 +281,7 @@ nlopt_result auglag_minimize(int n, nlopt_func f, void *f_data,
 	     condition seems not too different from requiring feasibility,
 	     especially now that the user can provide constraint-specific
 	     tolerances analogous to epsilon. */
-	  if (ICM == 0) return NLOPT_FTOL_REACHED;
+	  if (ICM == 0) {ret = NLOPT_FTOL_REACHED; break;}
      } while (1);
 
 done:

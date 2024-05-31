@@ -30,10 +30,13 @@
  * 
  * The original source code can be found at :
  * http://plato.la.asu.edu/topics/problems/nlores.html
+ *
+ * Original RCS id
+ * static char const rcsid[] =
+ *  "	@(#) $Jeannot: cobyla.c,v 1.11 2004/04/18 09:51:36 js Exp $";
+ *
  */
 
-static char const rcsid[] =
-  "@(#) $Jeannot: cobyla.c,v 1.11 2004/04/18 09:51:36 js Exp $";
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -198,6 +201,11 @@ nlopt_result cobyla_minimize(unsigned n, nlopt_func f, void *f_data,
 
      s.scale = nlopt_compute_rescaling(n, dx);
      if (!s.scale) { ret = NLOPT_OUT_OF_MEMORY; goto done; }
+     for (j = 0; j < n; ++j)
+         if (s.scale[j] == 0 || !nlopt_isfinite(s.scale[j])) {
+             nlopt_stop_msg(stop, "invalid scaling %g of dimension %d: possible over/underflow?", s.scale[j], j);
+             ret = NLOPT_INVALID_ARGS; goto done;
+         }
 
      s.lb = nlopt_new_rescaled(n, s.scale, lb);
      if (!s.lb) { ret = NLOPT_OUT_OF_MEMORY; goto done; }
@@ -211,9 +219,10 @@ nlopt_result cobyla_minimize(unsigned n, nlopt_func f, void *f_data,
      /* SGJ, 2008: compute rhoend from NLopt stop info */
      rhobeg = fabs(dx[0] / s.scale[0]);
      rhoend = stop->xtol_rel * (rhobeg);
-     for (j = 0; j < n; ++j)
-	  if (rhoend < stop->xtol_abs[j] / fabs(s.scale[j]))
-	       rhoend = stop->xtol_abs[j] / fabs(s.scale[j]);
+     if (stop->xtol_abs)
+      for (j = 0; j < n; ++j)
+	   if (rhoend < stop->xtol_abs[j] / fabs(s.scale[j]))
+	        rhoend = stop->xtol_abs[j] / fabs(s.scale[j]);
 
      /* each equality constraint gives two inequality constraints */
      m = nlopt_count_constraints(m, fc) + 2 * nlopt_count_constraints(p, h);
@@ -378,7 +387,7 @@ nlopt_result cobyla(int n, int m, double *x, double *minf, double rhobeg, double
  * for the main calculation.
  */
 
-  stop->nevals = 0;
+  *(stop->nevals_p) = 0;
 
   if (n == 0)
   {
@@ -473,7 +482,7 @@ static nlopt_result cobylb(int *n, int *m, int *mpp,
   int ivmc;
   int ivmd;
   int mp, np, iz, ibrnch;
-  int nbest, ifull, iptem, jdrop;
+  int nbest, ifull = 0, iptem, jdrop;
   nlopt_result rc = NLOPT_SUCCESS;
   uint32_t seed = (uint32_t) (*n + *m); /* arbitrary deterministic LCG seed */
   int feasible;
@@ -563,13 +572,13 @@ static nlopt_result cobylb(int *n, int *m, int *mpp,
 
 L40:
   if (nlopt_stop_forced(stop)) rc = NLOPT_FORCED_STOP;
-  else if (stop->nevals > 0) {
+  else if (*(stop->nevals_p) > 0) {
        if (nlopt_stop_evals(stop)) rc = NLOPT_MAXEVAL_REACHED;
        else if (nlopt_stop_time(stop)) rc = NLOPT_MAXTIME_REACHED;
   }
   if (rc != NLOPT_SUCCESS) goto L600;
 
-  stop->nevals++;
+  ++ *(stop->nevals_p);
   if (calcfc(*n, *m, &x[1], &f, &con[1], state))
   {
     if (*iprint >= 1) {
@@ -597,9 +606,9 @@ L40:
        goto L620; /* not L600 because we want to use current x, f, resmax */
   }
 
-  if (stop->nevals == *iprint - 1 || *iprint == 3) {
+  if (*(stop->nevals_p) == *iprint - 1 || *iprint == 3) {
     fprintf(stderr, "cobyla: NFVALS = %4d, F =%13.6E, MAXCV =%13.6E\n",
-	    stop->nevals, f, resmax);
+	    *(stop->nevals_p), f, resmax);
     i__1 = iptem;
     fprintf(stderr, "cobyla: X =");
     for (i__ = 1; i__ <= i__1; ++i__) {
@@ -631,7 +640,7 @@ L40:
   for (k = 1; k <= i__1; ++k) {
     datmat[k + jdrop * datmat_dim1] = con[k];
   }
-  if (stop->nevals > np) {
+  if (*(stop->nevals_p) > np) {
     goto L130;
   }
 
@@ -666,8 +675,8 @@ L40:
       }
     }
   }
-  if (stop->nevals <= *n) { /* evaluating initial simplex */
-    jdrop = stop->nevals;
+  if (*(stop->nevals_p) <= *n) { /* evaluating initial simplex */
+    jdrop = *(stop->nevals_p);
     /* SGJ: was += rho, but using sim[jdrop,jdrop] enforces consistency
             if we change the stepsize above to stay in [lb,ub]. */
     x[jdrop] += sim[jdrop + jdrop * sim_dim1];
@@ -1174,7 +1183,7 @@ L550:
     }
     if (*iprint == 2) {
       fprintf(stderr, "cobyla: NFVALS = %4d, F =%13.6E, MAXCV =%13.6E\n",
-        stop->nevals, datmat[mp + np * datmat_dim1], datmat[*mpp + np * datmat_dim1]);
+        *(stop->nevals_p), datmat[mp + np * datmat_dim1], datmat[*mpp + np * datmat_dim1]);
 
       fprintf(stderr, "cobyla: X =");
       i__1 = iptem;
@@ -1215,7 +1224,7 @@ L620:
   *minf = f;
   if (*iprint >= 1) {
     fprintf(stderr, "cobyla: NFVALS = %4d, F =%13.6E, MAXCV =%13.6E\n",
-	    stop->nevals, f, resmax);
+	    *(stop->nevals_p), f, resmax);
     i__1 = iptem;
     fprintf(stderr, "cobyla: X =");
     for (i__ = 1; i__ <= i__1; ++i__) {
@@ -1254,7 +1263,7 @@ static nlopt_result trstlp(int *n, int *m, double *a,
   double spabs;
   double temp, step;
   int icount;
-  int iout, i__, j, k;
+  int i__, j, k;
   int isave;
   int kk;
   int kl, kp, kw;
@@ -1471,10 +1480,8 @@ L130:
     temp = zdotv / zdota[k];
     if (temp > 0. && iact[k] <= *m) {
       tempa = vmultc[k] / temp;
-      if (ratio < 0. || tempa < ratio) {
+      if (ratio < 0. || tempa < ratio)
         ratio = tempa;
-        iout = k;
-      }
     }
     if (k >= 2) {
       kw = iact[k];
@@ -1500,6 +1507,12 @@ L130:
 /* new value of ZDOTA(NACT) and branch if it is not acceptable. */
 
   i__1 = nact;
+  
+/* This pragma fixes a known problem compiling with VS2013 or VS2015 in Release */
+/* see https://connect.microsoft.com/VisualStudio/feedback/details/1028781/c1001-on-release-build */
+#if defined(_MSC_VER) && _MSC_VER >= 1800
+  #pragma loop(no_vector)
+#endif
   for (k = 1; k <= i__1; ++k) {
     d__1 = 0., d__2 = vmultc[k] - ratio * vmultd[k];
     vmultc[k] = MAX2(d__1,d__2);

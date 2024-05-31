@@ -86,15 +86,20 @@ nlopt_result isres_minimize(int n, nlopt_func f, void *f_data,
      *minf = HUGE_VAL;
 
      if (!population) population = 20 * (n + 1);
-     if (population < 1) return NLOPT_INVALID_ARGS;
-     survivors = ceil(population * SURVIVOR);
+     if (population < 1) {
+         nlopt_stop_msg(stop, "population %d is too small", population);
+         return NLOPT_INVALID_ARGS;
+     }
+     survivors = (int) ceil(population * SURVIVOR);
 
      taup = PHI / sqrt(2*n);
      tau = PHI / sqrt(2*sqrt(n));
 
      /* we don't handle unbounded search regions */
-     for (j = 0; j < n; ++j) if (nlopt_isinf(lb[j]) || nlopt_isinf(ub[j]))
-				  return NLOPT_INVALID_ARGS;
+     for (j = 0; j < n; ++j) if (nlopt_isinf(lb[j]) || nlopt_isinf(ub[j])) {
+             nlopt_stop_msg(stop, "isres requires a finite search region");
+             return NLOPT_INVALID_ARGS;
+         }
 
      ires = imax2(nlopt_max_constraint_dim(m, fc),
 		  nlopt_max_constraint_dim(p, h));
@@ -129,7 +134,7 @@ nlopt_result isres_minimize(int n, nlopt_func f, void *f_data,
 	  for (k = 0; k < population; ++k) {
 	       int feasible = 1;
 	       double gpenalty;
-	       stop->nevals++;
+	       ++ *(stop->nevals_p);
 	       fval[k] = f(n, xs + k*n, NULL, f_data);
 	       if (nlopt_stop_forced(stop)) { 
 		    ret = NLOPT_FORCED_STOP; goto done; }

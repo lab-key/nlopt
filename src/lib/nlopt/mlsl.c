@@ -130,12 +130,12 @@ static double distance2(int n, const double *x1, const double *x2)
    this function is called when p is first added to our tree */
 static void find_closest_pt(int n, rb_tree *pts, pt *p)
 {
-     rb_node *node = rb_tree_find_lt(pts, (rb_key) p);
+     rb_node *node = nlopt_rb_tree_find_lt(pts, (rb_key) p);
      double closest_d = HUGE_VAL;
      while (node) {
 	  double d = distance2(n, p->x, ((pt *) node->k)->x);
 	  if (d < closest_d) closest_d = d;
-	  node = rb_tree_pred(node);
+	  node = nlopt_rb_tree_pred(node);
      }
      p->closest_pt_d = closest_d;
 }
@@ -144,12 +144,12 @@ static void find_closest_pt(int n, rb_tree *pts, pt *p)
    this function is called when p is first added to our tree */
 static void find_closest_lm(int n, rb_tree *lms, pt *p)
 {
-     rb_node *node = rb_tree_find_lt(lms, &p->f);
+     rb_node *node = nlopt_rb_tree_find_lt(lms, &p->f);
      double closest_d = HUGE_VAL;
      while (node) {
 	  double d = distance2(n, p->x, node->k+1);
 	  if (d < closest_d) closest_d = d;
-	  node = rb_tree_pred(node);
+	  node = nlopt_rb_tree_pred(node);
      }
      p->closest_lm_d = closest_d;
 }
@@ -161,14 +161,14 @@ static void find_closest_lm(int n, rb_tree *lms, pt *p)
    local minimization from the same point twice */
 static void pts_update_newpt(int n, rb_tree *pts, pt *newpt)
 {
-     rb_node *node = rb_tree_find_gt(pts, (rb_key) newpt);
+     rb_node *node = nlopt_rb_tree_find_gt(pts, (rb_key) newpt);
      while (node) {
 	  pt *p = (pt *) node->k;
 	  if (!p->minimized) {
 	       double d = distance2(n, newpt->x, p->x);
 	       if (d < p->closest_pt_d) p->closest_pt_d = d;
 	  }
-	  node = rb_tree_succ(node);
+	  node = nlopt_rb_tree_succ(node);
      }
 }
 
@@ -182,14 +182,14 @@ static void pts_update_newlm(int n, rb_tree *pts, double *newlm)
      pt tmp_pt;
      rb_node *node;
      tmp_pt.f = newlm[0];
-     node = rb_tree_find_gt(pts, (rb_key) &tmp_pt);
+     node = nlopt_rb_tree_find_gt(pts, (rb_key) &tmp_pt);
      while (node) {
 	  pt *p = (pt *) node->k;
 	  if (!p->minimized) {
 	       double d = distance2(n, newlm+1, p->x);
 	       if (d < p->closest_lm_d) p->closest_lm_d = d;
 	  }
-	  node = rb_tree_succ(node);
+	  node = nlopt_rb_tree_succ(node);
      }
 }
 
@@ -251,18 +251,18 @@ static pt *alloc_pt(int n)
 static double fcount(unsigned n, const double *x, double *grad, void *p_)
 {
      mlsl_data *p = (mlsl_data *) p_;
-     p->stop->nevals++;
+     ++ *(p->stop->nevals_p);
      return p->f(n, x, grad, p->f_data);
 }
 
 static void get_minf(mlsl_data *d, double *minf, double *x)
 {
-     rb_node *node = rb_tree_min(&d->pts);
+     rb_node *node = nlopt_rb_tree_min(&d->pts);
      if (node) {
 	  *minf = ((pt *) node->k)->f;
 	  memcpy(x, ((pt *) node->k)->x, sizeof(double) * d->n);
      }
-     node = rb_tree_min(&d->lms);
+     node = nlopt_rb_tree_min(&d->lms);
      if (node && node->k[0] < *minf) {
 	  *minf = node->k[0];
 	  memcpy(x, node->k + 1, sizeof(double) * d->n);
@@ -292,14 +292,17 @@ nlopt_result mlsl_minimize(int n, nlopt_func f, void *f_data,
 	  d.N = 4; /* FIXME: what is good number of samples per iteration? */
      else
 	  d.N = Nsamples;
-     if (d.N < 1) return NLOPT_INVALID_ARGS;
+     if (d.N < 1) {
+         nlopt_stop_msg(stop, "population %d is too small", d.N);
+         return NLOPT_INVALID_ARGS;
+     }
 
      d.n = n;
      d.lb = lb; d.ub = ub;
      d.stop = stop;
      d.f = f; d.f_data = f_data;
-     rb_tree_init(&d.pts, pt_compare);
-     rb_tree_init(&d.lms, lm_compare);
+     nlopt_rb_tree_init(&d.pts, pt_compare);
+     nlopt_rb_tree_init(&d.lms, lm_compare);
      d.s = lds ? nlopt_sobol_create((unsigned) n) : NULL;
 
      nlopt_set_min_objective(local_opt, fcount, &d);
@@ -330,8 +333,8 @@ nlopt_result mlsl_minimize(int n, nlopt_func f, void *f_data,
 
      memcpy(p->x, x, n * sizeof(double));
      p->f = f(n, x, NULL, f_data);
-     stop->nevals++;
-     if (!rb_tree_insert(&d.pts, (rb_key) p)) { 
+     ++ *(stop->nevals_p);
+     if (!nlopt_rb_tree_insert(&d.pts, (rb_key) p)) { 
 	  free(p); ret = NLOPT_OUT_OF_MEMORY; 
      }
      if (nlopt_stop_forced(stop)) ret = NLOPT_FORCED_STOP;
@@ -355,8 +358,8 @@ nlopt_result mlsl_minimize(int n, nlopt_func f, void *f_data,
 		    for (j = 0; j < n; ++j) p->x[j] = nlopt_urand(lb[j],ub[j]);
 	       }
 	       p->f = f(n, p->x, NULL, f_data);
-	       stop->nevals++;
-	       if (!rb_tree_insert(&d.pts, (rb_key) p)) { 
+	       ++ *(stop->nevals_p);
+	       if (!nlopt_rb_tree_insert(&d.pts, (rb_key) p)) { 
 		    free(p); ret = NLOPT_OUT_OF_MEMORY;
 	       }
 	       if (nlopt_stop_forced(stop)) ret = NLOPT_FORCED_STOP;
@@ -375,7 +378,7 @@ nlopt_result mlsl_minimize(int n, nlopt_func f, void *f_data,
 	       * pow(log((double) d.pts.N) / d.pts.N, 1.0 / n);
 
 	  /* local search phase: do local opt. for promising points */
-	  node = rb_tree_min(&d.pts);
+	  node = nlopt_rb_tree_min(&d.pts);
 	  for (i = (int) (ceil(d.gamma * d.pts.N) + 0.5); 
 	       node && i > 0 && ret == NLOPT_SUCCESS; --i) {
 	       p = (pt *) node->k;
@@ -399,12 +402,12 @@ nlopt_result mlsl_minimize(int n, nlopt_func f, void *f_data,
 		    if (!lm) { ret = NLOPT_OUT_OF_MEMORY; goto done; }
 		    memcpy(lm+1, p->x, sizeof(double) * n);
 		    lret = nlopt_optimize_limited(local_opt, lm+1, lm,
-						  stop->maxeval - stop->nevals,
+						  stop->maxeval - *(stop->nevals_p),
 						  stop->maxtime -
 						  (t - stop->start));
 		    p->minimized = 1;
 		    if (lret < 0) { free(lm); ret = lret; goto done; }
-		    if (!rb_tree_insert(&d.lms, lm)) { 
+		    if (!nlopt_rb_tree_insert(&d.lms, lm)) { 
 			 free(lm); ret = NLOPT_OUT_OF_MEMORY;
 		    }
 		    else if (nlopt_stop_forced(stop)) ret = NLOPT_FORCED_STOP;
@@ -421,7 +424,7 @@ nlopt_result mlsl_minimize(int n, nlopt_func f, void *f_data,
 	       /* TODO: additional stopping criteria based
 		  e.g. on improvement in function values, etc? */
 	       
-	       node = rb_tree_succ(node);
+	       node = nlopt_rb_tree_succ(node);
 	  }
      }
 
@@ -429,7 +432,7 @@ nlopt_result mlsl_minimize(int n, nlopt_func f, void *f_data,
 
  done:
      nlopt_sobol_destroy(d.s);
-     rb_tree_destroy_with_keys(&d.lms);
-     rb_tree_destroy_with_keys(&d.pts);
+     nlopt_rb_tree_destroy_with_keys(&d.lms);
+     nlopt_rb_tree_destroy_with_keys(&d.pts);
      return ret;
 }
