@@ -1,6 +1,6 @@
 .{
     .name = .lib_znlopt_k,
-    .fingerprint = 0x59556a118db78854,
+    .fingerprint = 0x582419b7c80dfcb6,
     .version = "0.0.1",
     .minimum_zig_version = "0.15.1",
     .paths = .{
